@@ -88,15 +88,30 @@ struct TodayView: View {
 
             Spacer()
 
-            Button { isAdding = true } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 34, height: 34)
-                    .background(Color(.tertiarySystemFill), in: .circle)
+            HStack(spacing: 8) {
+                // The hero only offers the run while the door is still ahead of
+                // you. Without this the screen is unreachable from half past
+                // seven until bedtime.
+                Button { showingRun = true } label: {
+                    Image(systemName: "sunrise")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .frame(width: 34, height: 34)
+                        .background(Color(.tertiarySystemFill), in: .circle)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Morning run")
+
+                Button { isAdding = true } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 34, height: 34)
+                        .background(Color(.tertiarySystemFill), in: .circle)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add a task")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Add a task")
             .padding(.top, 3)
         }
     }

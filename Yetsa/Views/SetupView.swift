@@ -115,7 +115,7 @@ struct SetupView: View {
                         .disabled(alarmState == .denied)
                     }
 
-                    ForEach(AlarmKind.allCases) { kind in
+                    ForEach(AlarmKind.userFacing) { kind in
                         AlarmToggleRow(
                             kind: kind,
                             summary: AlarmScheduler.summary(kind, schedules: ordered, calendar: Clock.calendar),
@@ -144,7 +144,7 @@ struct SetupView: View {
                 if isAuthorized {
                     await NotificationScheduler.reschedule(schedules: ordered)
                 }
-                enabledAlarms = Set(AlarmKind.allCases.filter(\.isEnabled).map(\.rawValue))
+                enabledAlarms = Set(AlarmKind.userFacing.filter(\.isEnabled).map(\.rawValue))
                 alarmState = AlarmScheduler.authorizationState
                 if alarmState == .authorized {
                     alarmCount = await AlarmScheduler.reschedule(schedules: ordered)

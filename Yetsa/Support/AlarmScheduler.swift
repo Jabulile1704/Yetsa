@@ -35,8 +35,16 @@ enum AlarmScheduler {
 
         var scheduled = 0
         for kind in AlarmKind.allCases where kind.isEnabled {
-            for (minutes, weekdays) in grouped(kind, in: schedules) {
-                if await schedule(kind, atMinutes: minutes, on: weekdays) { scheduled += 1 }
+            for (minutes, days) in grouped(kind, in: schedules) {
+                let weekdays = days.compactMap { localeWeekday($0.weekday) }
+                // A group shares a time, but the buffer behind it can differ.
+                // Take the tightest, so the snooze never overruns any day.
+                let plan = kind.allowsSnooze
+                    ? SnoozePlan(bufferMinutes: days.map(\.snoozeBuffer).min() ?? 0)
+                    : nil
+                if await schedule(kind, atMinutes: minutes, on: weekdays, snooze: plan) {
+                    scheduled += 1
+                }
             }
         }
         return scheduled
@@ -55,12 +63,11 @@ enum AlarmScheduler {
 
     // MARK: - Grouping
 
-    /// `[minutes from midnight: the weekdays that share it]` for one kind.
-    private static func grouped(_ kind: AlarmKind, in schedules: [DaySchedule]) -> [Int: [Locale.Weekday]] {
-        var buckets: [Int: [Locale.Weekday]] = [:]
+    /// `[minutes from midnight: the days that share it]` for one kind.
+    private static func grouped(_ kind: AlarmKind, in schedules: [DaySchedule]) -> [Int: [DaySchedule]] {
+        var buckets: [Int: [DaySchedule]] = [:]
         for schedule in schedules where kind.applies(to: schedule) {
-            guard let weekday = localeWeekday(schedule.weekday) else { continue }
-            buckets[kind.minutes(in: schedule), default: []].append(weekday)
+            buckets[kind.minutes(in: schedule), default: []].append(schedule)
         }
         return buckets
     }
@@ -83,33 +90,37 @@ enum AlarmScheduler {
     private static func schedule(
         _ kind: AlarmKind,
         atMinutes minutes: Int,
-        on weekdays: [Locale.Weekday]
+        on weekdays: [Locale.Weekday],
+        snooze plan: SnoozePlan?
     ) async -> Bool {
         guard !weekdays.isEmpty else { return false }
 
         let time = Alarm.Schedule.Relative.Time(hour: minutes / 60, minute: minutes % 60)
         let relative = Alarm.Schedule.Relative(time: time, repeats: .weekly(weekdays))
 
-        let snooze = kind.allowsSnooze
-            ? AlarmButton(
-                text: "Snooze \(kind.snoozeMinutes) min",
+        // A buffer too small to divide gets no snooze button at all.
+        let snoozing = plan.map(\.isAvailable) == true ? plan : nil
+
+        let snoozeButton = snoozing.map { plan in
+            AlarmButton(
+                text: "Snooze \(plan.minutes) min",
                 textColor: .white,
                 systemImageName: "zzz"
-              )
-            : nil
+            )
+        }
 
         let alert = AlarmPresentation.Alert(
             title: LocalizedStringResource(stringLiteral: kind.label),
-            secondaryButton: snooze,
-            secondaryButtonBehavior: snooze == nil ? nil : .countdown
+            secondaryButton: snoozeButton,
+            secondaryButtonBehavior: snoozeButton == nil ? nil : .countdown
         )
 
-        let countdown = kind.allowsSnooze
-            ? AlarmPresentation.Countdown(
-                title: LocalizedStringResource(stringLiteral: "Back in \(kind.snoozeMinutes) min"),
+        let countdown = snoozing.map { plan in
+            AlarmPresentation.Countdown(
+                title: LocalizedStringResource(stringLiteral: "Back in \(plan.minutes) min"),
                 pauseButton: nil
-              )
-            : nil
+            )
+        }
 
         let attributes = AlarmAttributes<YetsaAlarmMetadata>(
             presentation: AlarmPresentation(alert: alert, countdown: countdown),
@@ -118,9 +129,9 @@ enum AlarmScheduler {
         )
 
         let configuration = AlarmManager.AlarmConfiguration(
-            countdownDuration: kind.allowsSnooze
-                ? Alarm.CountdownDuration(preAlert: nil, postAlert: TimeInterval(kind.snoozeMinutes * 60))
-                : nil,
+            countdownDuration: snoozing.map {
+                Alarm.CountdownDuration(preAlert: nil, postAlert: TimeInterval($0.minutes * 60))
+            },
             schedule: .relative(relative),
             attributes: attributes,
             sound: .default
@@ -144,12 +155,23 @@ enum AlarmScheduler {
         }
         guard !byTime.isEmpty else { return "No working days set" }
 
-        return byTime
+        let base = byTime
             .sorted { $0.key < $1.key }
             .map { minutes, weekdays in
                 "\(Clock.clockString(minutes: minutes, calendar: calendar)) \(dayRange(weekdays))"
             }
             .joined(separator: " · ")
+
+        guard kind == .wake else { return base }
+
+        let applicable = schedules.filter { kind.applies(to: $0) }
+        guard let buffer = applicable.map(\.snoozeBuffer).min(),
+              let up = applicable.map(\.outOfBed).min() else { return base }
+
+        let plan = SnoozePlan(bufferMinutes: buffer)
+        guard plan.isAvailable else { return base + " · no snooze" }
+
+        return base + " · snooze ×\(plan.count) to \(Clock.clockString(minutes: up, calendar: calendar))"
     }
 
     /// Three or more days in a row collapse to a range; anything else lists.

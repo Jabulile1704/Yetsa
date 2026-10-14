@@ -96,11 +96,29 @@ the Clock app's do.
 
 | Alarm | When | Snooze |
 | --- | --- | --- |
-| Wake up | Your alarm time | 15 min |
+| Wake up | Your alarm time | Capped at the buffer |
 | Leave home | The moment you must be out of the door | No |
 | Knock off | End of the working day | No |
 
 Only the wake-up can be snoozed. Snoozing the door just makes you late.
+
+### The snooze runs out
+
+An alarm you can push back forever is not an alarm. The gap between your alarm
+and the time you genuinely have to move — 05:45 to 06:30, so forty-five minutes
+— is divided into whole snoozes of roughly a quarter of an hour: **three
+snoozes of fifteen minutes, landing exactly on 06:30**.
+
+The cap is not enforced by counting taps, which would only work while the app
+happened to be running. Switching on the wake-up quietly schedules a second
+alarm at your out-of-bed time **with no snooze button on it at all**. Snooze
+through the whole buffer and you arrive at an alarm that offers nothing but
+Stop. The hard stop has no setting of its own; it comes and goes with the
+wake-up, and shows as a bell on the Out of bed row in Today.
+
+Integer division does the work: the snooze chain always lands on the buffer or
+just inside it, never past it. A buffer under two minutes gets no snooze button
+at all.
 
 Alarms are grouped by time rather than by day, so Monday to Thursday share one
 weekly alarm and Friday gets its own because it ends half an hour earlier —

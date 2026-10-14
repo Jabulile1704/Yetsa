@@ -29,7 +29,8 @@ struct RoutinesView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AmbientBackground()
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
 
                 if groups.isEmpty {
                     ContentUnavailableView(

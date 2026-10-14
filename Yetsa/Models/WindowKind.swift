@@ -28,6 +28,20 @@ enum WindowKind: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// Short enough for the free-time strip, where each window gets about
+    /// seventy points of width.
+    var shortLabel: String {
+        switch self {
+        case .morning: "Morning"
+        case .commuteOut: "To work"
+        case .workMorning, .workAfternoon: "Work"
+        case .lunch: "Lunch"
+        case .commuteHome: "Home"
+        case .evening: "Evening"
+        case .afternoon: "Afternoon"
+        }
+    }
+
     var symbol: String {
         switch self {
         case .morning: "sunrise"

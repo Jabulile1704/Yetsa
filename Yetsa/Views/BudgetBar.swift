@@ -1,47 +1,35 @@
 import SwiftUI
 
-/// How full a window is. Overbooked bars fill completely and turn red rather
-/// than running off the edge, because "more than full" is the only fact that
-/// matters once you are past the end.
-struct BudgetBar: View {
-    let fraction: Double
-    @Environment(\.colorScheme) private var scheme
+/// A hairline-thin progress bar. Two tones: what is already done, then what is
+/// still planned against the window. The remainder is what is left over.
+struct ThinBar: View {
+    /// Fraction of the whole that is finished.
+    var done: Double = 0
+    /// Fraction that is planned but not yet done.
+    var pending: Double = 0
+    var height: CGFloat = 4
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(.quaternary.opacity(0.6))
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(.primary)
+                    .frame(width: proxy.size.width * clamped(done))
 
-                Capsule()
-                    .fill(Palette.load(fraction, scheme))
-                    .frame(width: proxy.size.width * min(1, max(0.02, fraction)))
+                Rectangle()
+                    .fill(.tertiary)
+                    .frame(width: proxy.size.width * clamped(pending))
+
+                Spacer(minLength: 0)
             }
         }
-        .frame(height: 6)
+        .frame(height: height)
+        .background(Color(.systemFill))
+        .clipShape(.rect(cornerRadius: height / 2))
         .accessibilityHidden(true)
     }
-}
 
-/// Small label pill used across the Today header.
-struct Chip: View {
-    let text: String
-    var symbol: String?
-    var tint: Color = .secondary
-
-    var body: some View {
-        HStack(spacing: 4) {
-            if let symbol {
-                Image(systemName: symbol)
-                    .font(.caption2)
-            }
-            Text(text)
-                .font(.caption.weight(.medium))
-                .monospacedDigit()
-        }
-        .foregroundStyle(tint)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
-        .background(.quaternary.opacity(0.45), in: .capsule)
+    private func clamped(_ value: Double) -> Double {
+        min(1, max(0, value))
     }
 }

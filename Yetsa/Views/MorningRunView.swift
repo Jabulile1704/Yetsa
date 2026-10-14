@@ -21,7 +21,8 @@ struct MorningRunView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AmbientBackground()
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
 
                 if let run {
                     content(run)

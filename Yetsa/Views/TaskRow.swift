@@ -1,6 +1,9 @@
 import SwiftUI
 import SwiftData
 
+/// One row of a grouped list. Monochrome by design: a tick is a filled circle,
+/// an estimate is grey text, and the only colour in the whole screen is kept
+/// for things that are actually wrong.
 struct TaskRow: View {
     let task: TaskItem
     let day: Date
@@ -9,7 +12,6 @@ struct TaskRow: View {
     var onEdit: (() -> Void)?
 
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.colorScheme) private var scheme
 
     private var calendar: Calendar { Clock.calendar }
     private var isTicked: Bool { RecurrenceEngine.isTicked(task, on: day, calendar: calendar) }
@@ -17,41 +19,61 @@ struct TaskRow: View {
     private var isSettled: Bool { isTicked || isSkipped }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
+        // Two separate buttons rather than a row-wide tap gesture: a gesture on
+        // the row swallows the tick, so the circle opened the editor instead of
+        // ticking the task.
+        HStack(spacing: 0) {
             tickButton
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(task.title)
-                    .font(.subheadline)
-                    .strikethrough(isSettled, color: .secondary)
-                    .foregroundStyle(isSettled ? .secondary : .primary)
-                    .multilineTextAlignment(.leading)
+            Button {
+                onEdit?()
+            } label: {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(task.title)
+                            .font(.body)
+                            .strikethrough(isSettled, color: .secondary)
+                            .foregroundStyle(isSettled ? .secondary : .primary)
+                            .multilineTextAlignment(.leading)
 
-                if !subtitleParts.isEmpty {
-                    Text(subtitleParts.joined(separator: " · "))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                        if task.isBatch {
+                            batchLine
+                        } else if let detail = subtitle {
+                            Text(detail)
+                                .font(.footnote)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
 
-                if task.isBatch {
-                    batchProgress
+                    Spacer(minLength: 8)
+
+                    Text(estimateText)
+                        .font(.subheadline)
+                        .monospacedDigit()
+                        .foregroundStyle(isSettled ? .tertiary : .secondary)
                 }
+                .contentShape(.rect)
             }
-
-            Spacer(minLength: 4)
-
-            estimateChip
+            .buttonStyle(.plain)
         }
-        .padding(.vertical, 2)
-        .contentShape(.rect)
-        .onTapGesture { onEdit?() }
+        .padding(.leading, 2)
+        .padding(.trailing, 14)
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button {
                 RecurrenceEngine.skip(task, on: day, calendar: calendar)
             } label: {
                 Label("Skip", systemImage: "arrow.uturn.forward")
             }
-            .tint(.orange)
+            .tint(.secondary)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if task.isBatch {
+                Button {
+                    advanceBatch()
+                } label: {
+                    Label("One more", systemImage: "plus")
+                }
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isTicked ? [.isButton, .isSelected] : .isButton)
@@ -62,72 +84,68 @@ struct TaskRow: View {
     private var tickButton: some View {
         Button {
             withAnimation(.snappy) {
-                RecurrenceEngine.toggle(task, on: day, calendar: calendar)
+                RecurrenceEngine.toggle(task, on: task.recurrence == .once ? .now : day, calendar: calendar)
             }
         } label: {
-            Image(systemName: tickSymbol)
-                .font(.title3)
-                .foregroundStyle(isTicked ? Color.accentColor : .secondary)
-                .symbolRenderingMode(.hierarchical)
+            ZStack {
+                if isTicked {
+                    Circle().fill(.primary)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color(.systemBackground))
+                } else if isSkipped {
+                    Circle().fill(.tertiary)
+                    Image(systemName: "minus")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color(.systemBackground))
+                } else {
+                    Circle().strokeBorder(Color(.systemGray3), lineWidth: 1.6)
+                }
+            }
+            .frame(width: 22, height: 22)
+            // An unfilled Circle only hit-tests its stroke, so without a
+            // content shape the tappable area is the 1.6pt ring. Padded out to
+            // a 44pt target while the ring stays 22.
+            .frame(width: 44, height: 44)
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isTicked ? "Mark \(task.title) not done" : "Mark \(task.title) done")
     }
 
-    private var tickSymbol: String {
-        if isTicked { return "checkmark.circle.fill" }
-        if isSkipped { return "minus.circle.fill" }
-        return "circle"
-    }
-
-    private var subtitleParts: [String] {
+    private var subtitle: String? {
         var parts: [String] = []
         if showsContext { parts.append(task.context.tag) }
         if showsCadence { parts.append(RecurrenceEngine.cadence(task, calendar: calendar)) }
         if !task.project.isEmpty { parts.append(task.project) }
         if isSkipped { parts.append("skipped") }
-        if task.hasNotes && !showsCadence { parts.append("note") }
-        return parts
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    private var batchProgress: some View {
+    private var batchLine: some View {
         HStack(spacing: 8) {
-            ProgressView(value: task.batchFraction)
-                .progressViewStyle(.linear)
-                .frame(maxWidth: 120)
+            ThinBar(done: task.batchFraction, height: 3)
+                .frame(width: 92)
 
-            Text("\(task.batchDone) of \(task.batchTotal)")
-                .font(.caption2)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-
-            Button {
-                advanceBatch()
-            } label: {
-                Image(systemName: "plus.circle.fill")
-                    .symbolRenderingMode(.hierarchical)
-            }
-            .buttonStyle(.plain)
-            .disabled(task.batchDone >= task.batchTotal)
-            .accessibilityLabel("Log one more for \(task.title)")
+            Text(batchText)
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
         }
     }
 
+    private var batchText: String {
+        var text = "\(task.batchDone) of \(task.batchTotal)"
+        if !task.project.isEmpty { text += " · \(task.project)" }
+        return text
+    }
+
     /// The estimate, unless enough real completions disagree with it — then it
-    /// shows what the thing actually takes.
-    private var estimateChip: some View {
+    /// shows what the thing actually takes, marked with a tilde.
+    private var estimateText: String {
         let measured = RecurrenceEngine.measuredAverage(task)
         let drifted = measured.map { abs($0 - task.estimateMinutes) >= max(5, task.estimateMinutes / 4) } ?? false
         let minutes = drifted ? (measured ?? task.estimateMinutes) : task.estimateMinutes
-
-        return Text(drifted ? "~\(Clock.shortDuration(minutes))" : Clock.shortDuration(minutes))
-            .font(.caption2.weight(.medium))
-            .monospacedDigit()
-            .foregroundStyle(drifted ? Color.orange : .secondary)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(.quaternary.opacity(0.5), in: .capsule)
-            .help(drifted ? "Your own logs say this takes longer than the estimate" : "")
+        return drifted ? "~\(Clock.shortDuration(minutes))" : Clock.shortDuration(minutes)
     }
 
     private func advanceBatch() {

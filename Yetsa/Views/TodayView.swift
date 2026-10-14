@@ -1,6 +1,12 @@
 import SwiftUI
 import SwiftData
 
+/// The day as a grouped list. Windows are sections, the scaffold's fixed
+/// points are section footers, and the free-time figures sit in the headers
+/// where a stock iOS list puts its secondary information.
+///
+/// Monochrome on purpose. Red appears only where something is genuinely wrong:
+/// a morning running late, or a window with nothing left in it.
 struct TodayView: View {
     @Query(sort: \TaskItem.createdAt) private var tasks: [TaskItem]
     @Query private var schedules: [DaySchedule]
@@ -9,6 +15,9 @@ struct TodayView: View {
     @State private var editing: TaskItem?
     @State private var isAdding = false
     @State private var showingRun = false
+    @State private var expanded: Set<String> = []
+
+    private var calendar: Calendar { Clock.calendar }
 
     private var plan: DayPlan {
         PlanBuilder.plan(for: now, schedules: schedules, tasks: tasks)
@@ -16,59 +25,41 @@ struct TodayView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                AmbientBackground()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    header
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        DayHeadline(plan: plan, now: now)
+                    hero
+                        .padding(.top, 14)
 
-                        if let run = MorningRun.from(plan), now < run.departure {
-                            MorningRunCard(run: run, now: now) { showingRun = true }
-                        }
-
-                        if !plan.quotaTasks.isEmpty {
-                            QuotaStrip(tasks: plan.quotaTasks, day: plan.date)
-                        }
-
-                        if !plan.overbookedWindows.isEmpty {
-                            OverbookedNote(windows: plan.overbookedWindows)
-                        }
-
-                        timeline
+                    if !plan.personalWindows.isEmpty {
+                        freeStrip
+                            .padding(.top, 10)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 4)
-                    .padding(.bottom, 90)
-                }
-                .scrollIndicators(.hidden)
-            }
-            .navigationTitle("Today")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    // Reachable all day, not just before the door — the
-                    // sequence is worth checking the night before too.
-                    Button { showingRun = true } label: {
-                        Image(systemName: "sunrise")
+
+                    if !plan.quotaTasks.isEmpty {
+                        quotaRow
+                            .padding(.top, 10)
                     }
-                    .accessibilityLabel("Morning run")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { isAdding = true } label: {
-                        Image(systemName: "plus")
+
+                    ForEach(plan.windows) { window in
+                        if shows(window) {
+                            section(window)
+                        }
                     }
-                    .accessibilityLabel("Add a task")
+
+                    bedtimeFooter
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 2)
+                .padding(.bottom, 110)
             }
-            .sheet(item: $editing) { task in
-                TaskFormView(editing: task)
-            }
-            .sheet(isPresented: $isAdding) {
-                TaskFormView(editing: nil)
-            }
-            .sheet(isPresented: $showingRun) {
-                MorningRunView()
-            }
+            .scrollIndicators(.hidden)
+            .background(Color(.systemGroupedBackground))
+            .toolbar(.hidden, for: .navigationBar)
+            .sheet(item: $editing) { TaskFormView(editing: $0) }
+            .sheet(isPresented: $isAdding) { TaskFormView(editing: nil) }
+            .sheet(isPresented: $showingRun) { MorningRunView() }
             .task {
                 while !Task.isCancelled {
                     now = .now
@@ -78,373 +69,346 @@ struct TodayView: View {
         }
     }
 
-    /// Whether a real alarm guards this anchor, so the row can show a bell.
-    private func isArmed(_ anchor: DayAnchor) -> Bool {
-        guard plan.isWorkday else { return false }
-        guard let kind = AlarmKind.allCases.first(where: { $0.anchorID == anchor.id }) else { return false }
-        return kind.isEnabled
-    }
+    // MARK: - Header
 
-    private var timeline: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(plan.timeline) { entry in
-                switch entry {
-                case .anchor(let anchor):
-                    AnchorRow(
-                        anchor: anchor,
-                        now: now,
-                        snoozeBuffer: anchor.id == "wake" ? plan.snoozeBufferMinutes : 0,
-                        hasAlarm: isArmed(anchor)
-                    )
-                case .window(let window):
-                    WindowCard(window: window, now: now) { editing = $0 }
-                }
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Today")
+                    .font(.system(size: 34, weight: .bold))
+                    .tracking(-0.9)
+
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
+
+            Spacer()
+
+            Button { isAdding = true } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 34, height: 34)
+                    .background(Color(.tertiarySystemFill), in: .circle)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add a task")
+            .padding(.top, 3)
         }
     }
-}
 
-// MARK: - Headline
-
-private struct DayHeadline: View {
-    let plan: DayPlan
-    let now: Date
-
-    private var calendar: Calendar { Clock.calendar }
-
-    private var settledCount: Int {
-        plan.windows.flatMap(\.tasks)
-            .filter { RecurrenceEngine.isSettled($0, on: plan.date, calendar: calendar) }
-            .count
+    private var subtitle: String {
+        let date = plan.date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated))
+        let all = plan.windows.flatMap(\.tasks)
+        guard !all.isEmpty else { return date }
+        let done = all.filter { RecurrenceEngine.isSettled($0, on: plan.date, calendar: calendar) }.count
+        return "\(date) · \(done) of \(all.count) done"
     }
 
-    private var totalCount: Int {
-        plan.windows.flatMap(\.tasks).count
-    }
+    // MARK: - Hero
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(plan.date.formatted(.dateTime.weekday(.wide)))
-                .font(.largeTitle.bold())
-
-            Text(plan.date.formatted(.dateTime.day().month(.wide).year()))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    if let current = plan.currentWindow(now) {
-                        Chip(
-                            text: "\(current.kind.label) · \(Clock.durationString(current.minutesLeft(from: now))) left",
-                            symbol: current.kind.symbol
-                        )
-                    }
-
-                    if let next = plan.nextAnchor(after: now) {
-                        let minutes = max(0, Int(next.time.timeIntervalSince(now) / 60))
-                        Chip(
-                            text: "\(next.label) in \(Clock.durationString(minutes))",
-                            symbol: next.symbol,
-                            tint: next.isDeparture ? .accentColor : .secondary
-                        )
-                    }
-
-                    if totalCount > 0 {
-                        Chip(text: "\(settledCount) of \(totalCount) done", symbol: "checkmark")
-                    }
-
-                    if !plan.isWorkday {
-                        Chip(text: "No work today", symbol: "sun.max")
-                    }
-                }
-                .padding(.vertical, 2)
+    /// The morning run while it is still ahead of you; otherwise whatever
+    /// fixed point is coming next.
+    @ViewBuilder private var hero: some View {
+        if let run = MorningRun.from(plan), now < run.departure {
+            Button { showingRun = true } label: {
+                heroBody(
+                    symbol: "sunrise",
+                    title: "Leave home in \(Clock.durationString(max(0, run.minutesToDeparture(from: now))))",
+                    warning: run.slack(from: now) < 0
+                        ? "\(Clock.durationString(-run.slack(from: now))) behind"
+                        : nil,
+                    detail: "Morning run · \(run.doneCount) of \(run.stepCount) done · \(Clock.durationString(run.remainingMinutes)) of work left",
+                    done: run.plannedMinutes > 0
+                        ? Double(run.plannedMinutes - run.remainingMinutes) / Double(max(1, windowCapacity(.morning)))
+                        : 0,
+                    pending: Double(run.remainingMinutes) / Double(max(1, windowCapacity(.morning))),
+                    chevron: true
+                )
             }
-            .scrollIndicators(.hidden)
+            .buttonStyle(.plain)
+        } else if let anchor = plan.nextAnchor(after: now) {
+            let current = plan.currentWindow(now)
+            heroBody(
+                symbol: anchor.symbol,
+                title: "\(anchor.label) in \(Clock.durationString(max(0, Int(anchor.time.timeIntervalSince(now) / 60))))",
+                warning: nil,
+                detail: current.map { window in
+                    "\(window.kind.label) · \(Clock.durationString(window.minutesLeft(from: now))) left"
+                } ?? "Nothing left on the scaffold today",
+                done: 0,
+                pending: current.map(\.loadFraction) ?? 0,
+                chevron: false
+            )
         }
     }
-}
 
-// MARK: - Morning run card
+    private func heroBody(
+        symbol: String,
+        title: String,
+        warning: String?,
+        detail: String,
+        done: Double,
+        pending: Double,
+        chevron: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.system(size: 17))
+                    .foregroundStyle(.primary)
+                    .frame(width: 18)
 
-private struct MorningRunCard: View {
-    let run: MorningRun
-    let now: Date
-    let onTap: () -> Void
+                Text(title)
+                    .font(.headline)
 
-    private var slack: Int { run.slack(from: now) }
+                Spacer(minLength: 6)
 
-    var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Label("Morning run", systemImage: "sunrise.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                if let warning {
+                    Text(warning)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.red)
+                }
+
+                if chevron {
                     Image(systemName: "chevron.right")
-                        .font(.caption2)
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(.tertiary)
                 }
+            }
 
-                Text("Leave home in \(Clock.durationString(max(0, run.minutesToDeparture(from: now))))")
-                    .font(.title3.weight(.semibold))
-                    .monospacedDigit()
-
-                HStack(spacing: 6) {
-                    Text("\(run.doneCount) of \(run.stepCount) done")
-                    Text("·")
-                    Text("\(Clock.durationString(run.remainingMinutes)) of work left")
-                }
-                .font(.caption)
+            Text(detail)
+                .font(.footnote)
                 .foregroundStyle(.secondary)
+                .padding(.leading, 28)
+                .padding(.top, 4)
 
-                Text(run.status(from: now))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(slack < 0 ? .red : (run.isComplete ? .green : .secondary))
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .glassEffect(.regular, in: .rect(cornerRadius: 22))
+            ThinBar(done: done, pending: pending)
+                .padding(.leading, 28)
+                .padding(.top, 10)
         }
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Quotas
-
-private struct QuotaStrip: View {
-    let tasks: [TaskItem]
-    let day: Date
-
-    private var calendar: Calendar { Clock.calendar }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Owed this week")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            ScrollView(.horizontal) {
-                HStack(spacing: 10) {
-                    ForEach(tasks) { task in
-                        QuotaPill(task: task, day: day, calendar: calendar)
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-            .scrollIndicators(.hidden)
-        }
-    }
-}
-
-private struct QuotaPill: View {
-    let task: TaskItem
-    let day: Date
-    let calendar: Calendar
-
-    private var done: Int { RecurrenceEngine.quotaDone(task, inWeekOf: day, calendar: calendar) }
-    private var target: Int { max(1, task.quotaPerWeek) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(task.title)
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
-
-            HStack(spacing: 4) {
-                ForEach(0..<target, id: \.self) { index in
-                    Circle()
-                        .fill(index < done ? Color.accentColor : Color.secondary.opacity(0.25))
-                        .frame(width: 7, height: 7)
-                }
-
-                Text("\(done) of \(target)")
-                    .font(.caption2)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 2)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
-    }
-}
-
-// MARK: - Overbooked
-
-private struct OverbookedNote: View {
-    let windows: [DayWindow]
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(windows.count == 1 ? "One window does not fit" : "\(windows.count) windows do not fit")
-                    .font(.caption.weight(.semibold))
-
-                Text(windows.map { "\($0.kind.label) is \(Clock.durationString(-$0.freeMinutes)) over" }
-                    .joined(separator: ", "))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .glassEffect(.regular, in: .rect(cornerRadius: 18))
+        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
     }
-}
 
-// MARK: - Anchors and windows
-
-private struct AnchorRow: View {
-    let anchor: DayAnchor
-    let now: Date
-    let snoozeBuffer: Int
-    var hasAlarm: Bool = false
-
-    @Environment(\.colorScheme) private var scheme
-
-    private var isPast: Bool { now >= anchor.time }
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Text(Clock.clockString(anchor.time))
-                .font(.caption.weight(.medium))
-                .monospacedDigit()
-                .frame(width: 58, alignment: .trailing)
-
-            Image(systemName: anchor.symbol)
-                .font(.caption)
-                .frame(width: 16)
-
-            Text(anchor.label)
-                .font(.caption.weight(anchor.isDeparture ? .semibold : .regular))
-
-            if hasAlarm {
-                Image(systemName: "alarm.fill")
-                    .font(.system(size: 9))
-                    .accessibilityLabel("Alarm set")
-            }
-
-            if snoozeBuffer > 0 {
-                Text("\(Clock.durationString(snoozeBuffer)) before you must move")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .foregroundStyle(
-            isPast
-                ? AnyShapeStyle(.tertiary)
-                : AnyShapeStyle(anchor.isDeparture ? Color.accentColor : Palette.anchorTint(scheme))
-        )
-        .padding(.leading, 2)
+    private func windowCapacity(_ kind: WindowKind) -> Int {
+        plan.window(kind)?.capacityMinutes ?? 0
     }
-}
 
-private struct WindowCard: View {
-    let window: DayWindow
-    let now: Date
-    let onEdit: (TaskItem) -> Void
+    // MARK: - Free time
 
-    @Environment(\.colorScheme) private var scheme
-
-    private var tint: Color { Palette.window(window.kind, scheme) }
-    private var isCurrent: Bool { window.isCurrent(now) }
-    /// Work blocks and commutes are scaffolding, not budget. They stay slim.
-    private var isCompact: Bool { window.kind.isWork || window.kind.isCommute }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            header
-
-            // An empty window needs no bar — the line below says it better.
-            if !isCompact, !window.isEmpty {
-                budget
-            }
-
-            if window.isEmpty {
-                if !isCompact {
-                    Text("Nothing planned · \(Clock.durationString(window.capacityMinutes)) wide open")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+    /// The whole point of the app, in one row: what is actually yours today.
+    private var freeStrip: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(plan.personalWindows.enumerated()), id: \.element.id) { index, window in
+                if index > 0 {
+                    Divider().frame(height: 34)
                 }
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(window.tasks) { task in
-                        TaskRow(
-                            task: task,
-                            day: window.date,
-                            showsContext: window.kind == .evening || window.kind == .afternoon
-                        ) {
-                            onEdit(task)
+
+                VStack(spacing: 2) {
+                    Text(freeText(window))
+                        .font(.system(size: 19, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(window.freeMinutes <= 0 ? AnyShapeStyle(.red) : AnyShapeStyle(.primary))
+
+                    Text(window.kind.shortLabel)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(height: 58)
+        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
+    }
+
+    private func freeText(_ window: DayWindow) -> String {
+        window.isOverbooked
+            ? "−" + Clock.shortDuration(-window.freeMinutes)
+            : Clock.shortDuration(window.freeMinutes)
+    }
+
+    // MARK: - Quotas
+
+    private var quotaRow: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 16) {
+                Text("Owed this week")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                ForEach(plan.quotaTasks) { task in
+                    let done = RecurrenceEngine.quotaDone(task, inWeekOf: plan.date, calendar: calendar)
+                    let target = max(1, task.quotaPerWeek)
+
+                    HStack(spacing: 5) {
+                        Text(task.title)
+                            .font(.subheadline)
+                            .lineLimit(1)
+
+                        ForEach(0..<target, id: \.self) { index in
+                            Circle()
+                                .fill(index < done ? AnyShapeStyle(.primary) : AnyShapeStyle(Color(.systemGray4)))
+                                .frame(width: 7, height: 7)
                         }
                     }
                 }
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(isCompact ? 11 : 14)
-        .glassEffect(.regular, in: .rect(cornerRadius: isCompact ? 16 : 22))
-        .overlay {
-            if isCurrent {
-                RoundedRectangle(cornerRadius: isCompact ? 16 : 22)
-                    .strokeBorder(tint.opacity(0.55), lineWidth: 1.5)
-            }
-        }
-        .opacity(window.isPast(now) && window.isEmpty ? 0.55 : 1)
+        .scrollIndicators(.hidden)
+        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
     }
 
-    private var header: some View {
-        HStack(spacing: 8) {
-            Image(systemName: window.kind.symbol)
-                .font(.caption)
-                .foregroundStyle(tint)
+    // MARK: - Sections
 
-            Text(window.kind.label)
-                .font(isCompact ? .caption.weight(.medium) : .subheadline.weight(.semibold))
+    /// Anything with work in it, plus empty windows big enough to be worth
+    /// filling. A blank fifteen-minute commute is just noise.
+    private func shows(_ window: DayWindow) -> Bool {
+        if !window.isEmpty { return true }
+        return !window.kind.isWork && window.capacityMinutes >= 30
+    }
 
-            if isCurrent {
-                Text("now")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(tint)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(tint.opacity(0.15), in: .capsule)
+    private func section(_ window: DayWindow) -> some View {
+        let open = window.tasks.filter { !RecurrenceEngine.isSettled($0, on: plan.date, calendar: calendar) }
+        let settled = window.tasks.filter { RecurrenceEngine.isSettled($0, on: plan.date, calendar: calendar) }
+        let isOpen = expanded.contains(window.id)
+
+        return VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(window)
+
+            VStack(spacing: 0) {
+                if open.isEmpty && settled.isEmpty {
+                    Text("Nothing planned")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                } else {
+                    ForEach(Array(open.enumerated()), id: \.element.id) { index, task in
+                        if index > 0 { Divider().padding(.leading, 46) }
+                        TaskRow(task: task, day: plan.date) { editing = task }
+                    }
+
+                    if !settled.isEmpty {
+                        if !open.isEmpty { Divider().padding(.leading, 46) }
+                        completedRow(window: window, count: settled.count, isOpen: isOpen)
+
+                        if isOpen {
+                            ForEach(settled) { task in
+                                Divider().padding(.leading, 46)
+                                TaskRow(task: task, day: plan.date) { editing = task }
+                            }
+                        }
+                    }
+                }
             }
+            .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
 
-            Spacer(minLength: 4)
+            if let anchor = plan.anchorAfter(window.kind) {
+                anchorFooter(anchor)
+            }
+        }
+    }
 
-            Text("\(Clock.clockString(window.start)) – \(Clock.clockString(window.end))")
-                .font(.caption2)
-                .monospacedDigit()
+    private func sectionHeader(_ window: DayWindow) -> some View {
+        HStack(spacing: 6) {
+            Text("\(window.kind.label.uppercased()) · \(Clock.clockString(window.start))")
+                .font(.caption.weight(.semibold))
+                .tracking(0.5)
                 .foregroundStyle(.secondary)
+
+            if let kind = armedAlarm(at: window.start) {
+                Image(systemName: "alarm")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("\(kind.label) alarm set")
+            }
+
+            Spacer()
+
+            Text(window.kind.isWork
+                 ? Clock.durationString(window.capacityMinutes).uppercased()
+                 : "\(Clock.durationString(max(0, window.freeMinutes)).uppercased()) FREE")
+                .font(.caption.weight(.semibold))
+                .tracking(0.5)
+                .foregroundStyle(window.isOverbooked ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 20)
+        .padding(.bottom, 6)
     }
 
-    private var budget: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text("\(Clock.durationString(window.plannedMinutes)) of \(Clock.durationString(window.capacityMinutes)) planned")
-                    .font(.caption2)
-                    .monospacedDigit()
+    private func completedRow(window: DayWindow, count: Int, isOpen: Bool) -> some View {
+        Button {
+            withAnimation(.snappy) {
+                if isOpen { expanded.remove(window.id) } else { expanded.insert(window.id) }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "chevron.down")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isOpen ? 0 : -90))
+                    .frame(width: 22)
+
+                Text("\(count) completed")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                Spacer(minLength: 4)
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
 
-                Text(window.isOverbooked
-                     ? "\(Clock.durationString(-window.freeMinutes)) over"
-                     : "\(Clock.durationString(window.freeMinutes)) free")
-                    .font(.caption2.weight(.semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(Palette.load(window.loadFraction, scheme))
+    private func anchorFooter(_ anchor: DayAnchor) -> some View {
+        HStack(spacing: 6) {
+            if let kind = armedAlarm(at: anchor.time) {
+                Image(systemName: "alarm")
+                    .font(.system(size: 11))
+                    .accessibilityLabel("\(kind.label) alarm set")
             }
 
-            BudgetBar(fraction: window.loadFraction)
+            Text("\(Clock.clockString(anchor.time)) \(anchor.label)")
+                .font(.footnote)
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 16)
+        .padding(.top, 7)
+    }
+
+    private var bedtimeFooter: some View {
+        Group {
+            if let bed = plan.bedtime {
+                HStack(spacing: 6) {
+                    Image(systemName: bed.symbol)
+                        .font(.system(size: 11))
+                    Text("\(Clock.clockString(bed.time)) \(bed.label)")
+                        .font(.footnote)
+                }
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 16)
+                .padding(.top, 22)
+            }
+        }
+    }
+
+    /// Which alarm, if any, guards this moment — so the row can show a bell.
+    private func armedAlarm(at time: Date) -> AlarmKind? {
+        guard plan.isWorkday else { return nil }
+        let minutes = Clock.minutesFromMidnight(time, calendar: calendar)
+        let schedule = PlanBuilder.schedule(for: plan.date, in: schedules, calendar: calendar)
+
+        return AlarmKind.allCases.first { kind in
+            kind.isEnabled && kind.applies(to: schedule) && kind.minutes(in: schedule) == minutes
         }
     }
 }

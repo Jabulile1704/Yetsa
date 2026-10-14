@@ -103,6 +103,21 @@ struct DayPlan {
         anchors.first { $0.time > now }
     }
 
+    /// The fixed point a window runs into — the door after the morning, lunch
+    /// after the morning's work. Read off the timeline so the two can never
+    /// drift apart.
+    func anchorAfter(_ kind: WindowKind) -> DayAnchor? {
+        guard let index = timeline.firstIndex(where: {
+            if case .window(let window) = $0 { return window.kind == kind }
+            return false
+        }) else { return nil }
+
+        for entry in timeline[timeline.index(after: index)...] {
+            if case .anchor(let anchor) = entry { return anchor }
+        }
+        return nil
+    }
+
     func currentWindow(_ now: Date) -> DayWindow? {
         windows.first { $0.isCurrent(now) }
     }

@@ -57,6 +57,24 @@ turns red and the day tells you before the morning does.
 | **Routines** | Everything that comes back, grouped by how it comes back, each with its cadence and next date. |
 | **Setup** | Your week, one day at a time, and which reminders are on. |
 
+## How it looks
+
+A grouped iOS list, monochrome. Windows are sections, the scaffold's fixed
+points are section footers, and the free-time figures sit in the headers where
+a stock list puts its secondary information. Under the title sits one row that
+answers the only question that matters at a glance — how much of today is
+actually yours:
+
+```
+15m      15m       45m      0m       4h30
+Morning  To work   Lunch    Home     Evening
+```
+
+There is no colour anywhere except red, and red means something is wrong: a
+morning running late, or a window with nothing left in it. Work sections show
+their length rather than a free figure, because that time is not yours to
+budget and quoting "free" minutes against it would be a lie.
+
 ## Recurrence
 
 The part most apps get wrong, and the reason this one exists:

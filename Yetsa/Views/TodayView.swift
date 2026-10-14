@@ -16,6 +16,7 @@ struct TodayView: View {
     @State private var isAdding = false
     @State private var showingRun = false
     @State private var expanded: Set<String> = []
+    @State private var openedEarlier: Set<String> = []
 
     private var calendar: Calendar { Clock.calendar }
 
@@ -42,10 +43,12 @@ struct TodayView: View {
                             .padding(.top, 10)
                     }
 
-                    ForEach(plan.windows) { window in
-                        if shows(window) {
-                            section(window)
-                        }
+                    if !finishedWindows.isEmpty {
+                        earlierSection
+                    }
+
+                    ForEach(liveWindows) { window in
+                        section(window)
                     }
 
                     bedtimeFooter
@@ -261,6 +264,110 @@ struct TodayView: View {
         }
         .scrollIndicators(.hidden)
         .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
+    }
+
+    // MARK: - Earlier
+
+    /// A window is finished once it is behind you, or once everything in it is
+    /// settled. Either way it stops earning a section of its own.
+    private func isFinished(_ window: DayWindow) -> Bool {
+        if window.isPast(now) { return true }
+        guard !window.tasks.isEmpty else { return false }
+        return window.tasks.allSatisfy {
+            RecurrenceEngine.isSettled($0, on: plan.date, calendar: calendar)
+        }
+    }
+
+    private var finishedWindows: [DayWindow] {
+        plan.windows.filter { shows($0) && isFinished($0) }
+    }
+
+    private var liveWindows: [DayWindow] {
+        plan.windows.filter { shows($0) && !isFinished($0) }
+    }
+
+    /// Everything behind you, one line each, so the part of the day you can
+    /// still do something about starts near the top of the screen.
+    private var earlierSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("EARLIER")
+                    .font(.caption.weight(.semibold))
+                    .tracking(0.5)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 20)
+            .padding(.bottom, 6)
+
+            VStack(spacing: 0) {
+                ForEach(Array(finishedWindows.enumerated()), id: \.element.id) { index, window in
+                    if index > 0 { Divider().padding(.leading, 16) }
+
+                    earlierRow(window)
+
+                    if openedEarlier.contains(window.id) {
+                        ForEach(window.tasks) { task in
+                            Divider().padding(.leading, 46)
+                            TaskRow(task: task, day: plan.date) { editing = task }
+                        }
+                    }
+                }
+            }
+            .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
+        }
+    }
+
+    private func earlierRow(_ window: DayWindow) -> some View {
+        let isOpen = openedEarlier.contains(window.id)
+        let left = window.tasks.filter {
+            !RecurrenceEngine.isSettled($0, on: plan.date, calendar: calendar)
+        }.count
+
+        return Button {
+            withAnimation(.snappy) {
+                if isOpen { openedEarlier.remove(window.id) } else { openedEarlier.insert(window.id) }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text(window.kind.label)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+
+                Text(Clock.clockString(window.start))
+                    .font(.footnote)
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+
+                Spacer(minLength: 6)
+
+                Text(earlierStatus(window))
+                    .font(.subheadline)
+                    .monospacedDigit()
+                    // Something left behind in a window that has gone is worth
+                    // a touch more weight than a tidy one.
+                    .foregroundStyle(left > 0 ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(isOpen ? 0 : -90))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func earlierStatus(_ window: DayWindow) -> String {
+        let total = window.tasks.count
+        guard total > 0 else { return "Nothing planned" }
+        let done = window.tasks.filter {
+            RecurrenceEngine.isSettled($0, on: plan.date, calendar: calendar)
+        }.count
+        return done == total ? "\(total) done" : "\(total - done) left"
     }
 
     // MARK: - Sections

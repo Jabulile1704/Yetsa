@@ -70,6 +70,11 @@ actually yours:
 Morning  To work   Lunch    Home     Evening
 ```
 
+Windows behind you collapse to one line each under **Earlier**, with what you
+left in them — `Morning at home 6:30 · 4 left`. Tap one to open it in place.
+By the evening that is five lines instead of five sections, so the part of the
+day you can still do something about starts near the top of the screen.
+
 There is no colour anywhere except red, and red means something is wrong: a
 morning running late, or a window with nothing left in it. Work sections show
 their length rather than a free figure, because that time is not yours to

@@ -75,7 +75,8 @@ struct MorningRunView: View {
                     }
 
                     Text(isImminent ? "\(minutesLeft)" : Clock.durationString(minutesLeft))
-                        .font(.system(size: isImminent ? 76 : 54, weight: .bold, design: .rounded))
+                        .font(.system(size: isImminent ? 76 : 54, weight: .bold))
+                        .tracking(-2)
                         .monospacedDigit()
                         .contentTransition(.numericText(value: Double(minutesLeft)))
 
@@ -88,7 +89,9 @@ struct MorningRunView: View {
                     if isImminent {
                         Text(run.status(from: now))
                             .font(.headline)
-                            .foregroundStyle(slack < 0 ? .red : (run.isComplete ? .green : .primary))
+                            // Behind is the only state worth colouring. Being
+                            // on time is the normal case, not an achievement.
+                            .foregroundStyle(slack < 0 ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
                             .padding(.top, 6)
                     } else {
                         Text("\(Clock.durationString(run.plannedMinutes)) of steps in a \(Clock.durationString(windowMinutes(run))) window")
@@ -145,20 +148,19 @@ private struct StepRow: View {
         } label: {
             HStack(spacing: 14) {
                 ZStack {
-                    Circle()
-                        .fill(isDone ? Color.accentColor : Color.secondary.opacity(0.18))
-                        .frame(width: 34, height: 34)
-
                     if isDone {
+                        Circle().fill(.primary)
                         Image(systemName: "checkmark")
                             .font(.subheadline.weight(.bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color(.systemBackground))
                     } else {
+                        Circle().strokeBorder(Color(.systemGray3), lineWidth: 1.6)
                         Text("\(number)")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
                 }
+                .frame(width: 34, height: 34)
 
                 Text(task.title)
                     .font(.body.weight(.medium))
@@ -176,7 +178,7 @@ private struct StepRow: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .glassEffect(.regular, in: .rect(cornerRadius: 20))
+            .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .disabled(!isTickable)

@@ -1,0 +1,16 @@
+<!-- Concept 3 — free-time meters, the icon of the Today strip. Not shipped:
+     the busiest of the six and the first to turn to mush at 29pt.
+     Recentred since the canvas draft, which sat four units right. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024">
+  <rect width="100" height="100" fill="#FFFFFF"/>
+  <g fill="#0B0B0C">
+    <rect x="16.5" y="22" width="13" height="56" rx="6.5" opacity="0.18"/>
+    <rect x="16.5" y="56" width="13" height="22" rx="6.5"/>
+    <rect x="34.5" y="22" width="13" height="56" rx="6.5" opacity="0.18"/>
+    <rect x="34.5" y="42" width="13" height="36" rx="6.5"/>
+    <rect x="52.5" y="22" width="13" height="56" rx="6.5" opacity="0.18"/>
+    <rect x="52.5" y="64" width="13" height="14" rx="6.5"/>
+    <rect x="70.5" y="22" width="13" height="56" rx="6.5" opacity="0.18"/>
+    <rect x="70.5" y="30" width="13" height="48" rx="6.5"/>
+  </g>
+</svg>

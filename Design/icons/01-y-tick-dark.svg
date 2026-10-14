@@ -1,0 +1,8 @@
+<!-- Yetsa app icon — the Y-tick. Shipped. Dark variant. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024">
+  <rect width="100" height="100" fill="#0B0B0C"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M27 37 L43 57 L73 21"/>
+    <path d="M43 57 L43 79"/>
+  </g>
+</svg>

@@ -1,0 +1,11 @@
+<!-- Concept 2 — the day, stacked. Blocks of different lengths, solid where
+     the time is spoken for and pale where it is free. Not shipped. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024">
+  <rect width="100" height="100" fill="#FFFFFF"/>
+  <g fill="#0B0B0C">
+    <rect x="38" y="16" width="24" height="18" rx="9"/>
+    <rect x="38" y="38" width="24" height="20" rx="10" opacity="0.18"/>
+    <rect x="38" y="62" width="24" height="10" rx="5"/>
+    <rect x="38" y="76" width="24" height="10" rx="5" opacity="0.18"/>
+  </g>
+</svg>

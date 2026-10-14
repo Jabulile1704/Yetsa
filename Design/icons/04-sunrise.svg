@@ -1,0 +1,12 @@
+<!-- Concept 4 — sunrise, for the morning run. Not shipped: warm and human,
+     but plenty of apps use a sunrise, so it says little about this one. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024">
+  <rect width="100" height="100" fill="#FFFFFF"/>
+  <path d="M28 58 A 22 22 0 0 1 72 58 Z" fill="#0B0B0C"/>
+  <g stroke="#0B0B0C" stroke-linecap="round" fill="none">
+    <path d="M18 70 L82 70" stroke-width="9"/>
+    <path d="M50 22 L50 30" stroke-width="8"/>
+    <path d="M24 32 L29 38" stroke-width="8"/>
+    <path d="M76 32 L71 38" stroke-width="8"/>
+  </g>
+</svg>

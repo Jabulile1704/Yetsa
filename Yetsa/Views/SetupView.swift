@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UserNotifications
+import AlarmKit
 
 /// The scaffold lives here. Everything else in the app is derived from it, so
 /// this is the only screen that ever needs correcting when life changes shape.
@@ -9,6 +10,44 @@ struct SetupView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var isAuthorized = false
+    @State private var alarmState: AlarmManager.AuthorizationState = .notDetermined
+    @State private var alarmCount = 0
+    /// Which alarms are on. Held here rather than in each row: a dynamic
+    /// `@AppStorage` key is only read when a view is first created, which
+    /// makes rows inside a ForEach unreliable.
+    @State private var enabledAlarms: Set<String> = []
+
+    private func binding(for kind: AlarmKind) -> Binding<Bool> {
+        Binding(
+            get: { enabledAlarms.contains(kind.rawValue) },
+            set: { isOn in
+                if isOn {
+                    enabledAlarms.insert(kind.rawValue)
+                } else {
+                    enabledAlarms.remove(kind.rawValue)
+                }
+                UserDefaults.standard.set(isOn, forKey: kind.defaultsKey)
+                Task { @MainActor in
+                    alarmCount = await AlarmScheduler.reschedule(schedules: ordered)
+                }
+            }
+        )
+    }
+
+    private var alarmFooter: String {
+        switch alarmState {
+        case .authorized where alarmCount > 0:
+            "Alarms sound through silent mode and through a Focus, unlike reminders. \(alarmCount) scheduled, grouped so days sharing a time share an alarm."
+        case .authorized:
+            "Alarms sound through silent mode and through a Focus. None are switched on yet."
+        case .denied:
+            "Alarms were turned down. Allow them for Yetsa in Settings → Yetsa if you change your mind."
+        case .notDetermined:
+            "Reminders can be silenced by a Focus and slept through. Alarms cannot — these three are the ones worth waking for."
+        @unknown default:
+            "Alarms sound through silent mode and through a Focus."
+        }
+    }
 
     private var ordered: [DaySchedule] {
         Weekday.orderedMondayFirst.compactMap { weekday in
@@ -64,6 +103,33 @@ struct SetupView: View {
                 }
 
                 Section {
+                    if alarmState != .authorized {
+                        Button {
+                            Task { @MainActor in
+                                alarmState = await AlarmScheduler.requestAuthorization()
+                                alarmCount = await AlarmScheduler.reschedule(schedules: ordered)
+                            }
+                        } label: {
+                            Label("Allow alarms", systemImage: "alarm.waves.left.and.right")
+                        }
+                        .disabled(alarmState == .denied)
+                    }
+
+                    ForEach(AlarmKind.allCases) { kind in
+                        AlarmToggleRow(
+                            kind: kind,
+                            summary: AlarmScheduler.summary(kind, schedules: ordered, calendar: Clock.calendar),
+                            isOn: binding(for: kind)
+                        )
+                        .disabled(alarmState != .authorized)
+                    }
+                } header: {
+                    Text("Alarms")
+                } footer: {
+                    Text(alarmFooter)
+                }
+
+                Section {
                     LabeledContent("Stored", value: "On this iPhone only")
                     LabeledContent("Week starts", value: "Monday")
                 } header: {
@@ -77,6 +143,11 @@ struct SetupView: View {
                 isAuthorized = await NotificationScheduler.authorizationStatus() == .authorized
                 if isAuthorized {
                     await NotificationScheduler.reschedule(schedules: ordered)
+                }
+                enabledAlarms = Set(AlarmKind.allCases.filter(\.isEnabled).map(\.rawValue))
+                alarmState = AlarmScheduler.authorizationState
+                if alarmState == .authorized {
+                    alarmCount = await AlarmScheduler.reschedule(schedules: ordered)
                 }
             }
         }
@@ -108,6 +179,9 @@ private struct DayScheduleRow: View {
 
 private struct DayScheduleEditor: View {
     @Bindable var schedule: DaySchedule
+    /// Alarms group days that share a time, so a change to one day has to be
+    /// weighed against all of them.
+    @Query private var allSchedules: [DaySchedule]
 
     private var calendar: Calendar { Clock.calendar }
 
@@ -167,6 +241,7 @@ private struct DayScheduleEditor: View {
         .onDisappear {
             Task { @MainActor in
                 await NotificationScheduler.reschedule(schedules: [schedule])
+                await AlarmScheduler.reschedule(schedules: allSchedules)
             }
         }
     }
@@ -223,5 +298,23 @@ private struct NotificationToggleRow: View {
             }
         }
         .onChange(of: isOn) { _, _ in onChange() }
+    }
+}
+
+private struct AlarmToggleRow: View {
+    let kind: AlarmKind
+    let summary: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            VStack(alignment: .leading, spacing: 2) {
+                Label(kind.label, systemImage: kind.symbol)
+                Text(isOn ? summary : kind.blurb)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+        }
     }
 }

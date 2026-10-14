@@ -78,6 +78,13 @@ struct TodayView: View {
         }
     }
 
+    /// Whether a real alarm guards this anchor, so the row can show a bell.
+    private func isArmed(_ anchor: DayAnchor) -> Bool {
+        guard plan.isWorkday else { return false }
+        guard let kind = AlarmKind.allCases.first(where: { $0.anchorID == anchor.id }) else { return false }
+        return kind.isEnabled
+    }
+
     private var timeline: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(plan.timeline) { entry in
@@ -86,7 +93,8 @@ struct TodayView: View {
                     AnchorRow(
                         anchor: anchor,
                         now: now,
-                        snoozeBuffer: anchor.id == "wake" ? plan.snoozeBufferMinutes : 0
+                        snoozeBuffer: anchor.id == "wake" ? plan.snoozeBufferMinutes : 0,
+                        hasAlarm: isArmed(anchor)
                     )
                 case .window(let window):
                     WindowCard(window: window, now: now) { editing = $0 }
@@ -295,6 +303,7 @@ private struct AnchorRow: View {
     let anchor: DayAnchor
     let now: Date
     let snoozeBuffer: Int
+    var hasAlarm: Bool = false
 
     @Environment(\.colorScheme) private var scheme
 
@@ -313,6 +322,12 @@ private struct AnchorRow: View {
 
             Text(anchor.label)
                 .font(.caption.weight(anchor.isDeparture ? .semibold : .regular))
+
+            if hasAlarm {
+                Image(systemName: "alarm.fill")
+                    .font(.system(size: 9))
+                    .accessibilityLabel("Alarm set")
+            }
 
             if snoozeBuffer > 0 {
                 Text("\(Clock.durationString(snoozeBuffer)) before you must move")

@@ -87,6 +87,32 @@ knock-off needs no second setting:
 | Tomorrow needs | 1h 45 before bed |
 | Week review | 30 min before Friday's knock-off |
 
+## Alarms
+
+Reminders are polite: a Focus silences them and a sleeping person ignores them.
+Three moments in the week are not negotiable, so those use **AlarmKit** instead
+— real alarms that sound through silent mode and through a Focus, the same way
+the Clock app's do.
+
+| Alarm | When | Snooze |
+| --- | --- | --- |
+| Wake up | Your alarm time | 15 min |
+| Leave home | The moment you must be out of the door | No |
+| Knock off | End of the working day | No |
+
+Only the wake-up can be snoozed. Snoozing the door just makes you late.
+
+Alarms are grouped by time rather than by day, so Monday to Thursday share one
+weekly alarm and Friday gets its own because it ends half an hour earlier —
+`16:00 Fri · 16:30 Mon–Thu`. That keeps the count down, which matters because
+AlarmKit caps how many alarms an app may hold.
+
+All three follow `isWorkday`, so weekends stay quiet unless you mark one as a
+working day in Setup. They are off until you switch them on; an app that starts
+making noise at 05:45 uninvited is not a good houseguest.
+
+AlarmKit needs iOS 26.1, which is why that is the deployment target.
+
 ## Estimate honesty
 
 Completions can record what something really took. Once a task has three

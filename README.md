@@ -57,6 +57,22 @@ turns red and the day tells you before the morning does.
 | **Routines** | Everything that comes back, grouped by how it comes back, each with its cadence and next date. |
 | **Setup** | Your week, one day at a time, and which reminders are on. |
 
+## The icon
+
+A Y whose long right arm also reads as a check — the app's name and what it
+does in one stroke. Black on white, white on black, no colour.
+
+It is generated rather than drawn, so it can be changed in one place:
+
+```bash
+swift Tools/MakeIcon.swift Yetsa/Assets.xcassets/AppIcon.appiconset
+```
+
+That writes the light, dark and tinted 1024px PNGs, each opaque — an App Store
+icon may not carry an alpha channel. The script measures the stroked outline
+and centres on that rather than on the path, because the short left arm leaves
+the mark leaning right otherwise.
+
 ## How it looks
 
 A grouped iOS list, monochrome. Windows are sections, the scaffold's fixed

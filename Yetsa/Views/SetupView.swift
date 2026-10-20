@@ -147,7 +147,8 @@ struct SetupView: View {
                         HStack {
                             Label("Work location", systemImage: "building.2")
                             Spacer()
-                            Text(workPlace.isSet ? "\(Int(workPlace.radius)) m" : "Not set")
+                            Text(workPlace.isSet ? (workPlace.name.isEmpty ? "\(Int(workPlace.radius)) m" : workPlace.name) : "Not set")
+                                .lineLimit(1)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }

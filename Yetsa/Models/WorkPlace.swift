@@ -14,6 +14,8 @@ final class WorkPlace {
     /// hundred, so that is the floor.
     var radius: Double = 150
     var isSet: Bool = false
+    /// What the place is called, so Setup can say more than a radius.
+    var name: String = ""
     /// When you last crossed into the circle, so the app can stay quiet for
     /// the rest of the day and compare the real time against the scaffold.
     var lastArrival: Date?

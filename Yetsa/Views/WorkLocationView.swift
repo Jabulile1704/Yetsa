@@ -12,6 +12,10 @@ struct WorkLocationView: View {
     @State private var service = LocationService.shared
     @State private var camera: MapCameraPosition = .automatic
     @State private var isLocating = false
+    @State private var query = ""
+    @State private var results: [MKMapItem] = []
+    @State private var isSearching = false
+    @State private var searchFailed = false
 
     private var calendar: Calendar { Clock.calendar }
 
@@ -23,6 +27,54 @@ struct WorkLocationView: View {
                     .frame(height: 240)
             } footer: {
                 Text("Tap the map to move the circle. Yetsa notices when you cross into it and says so once a day, on working days only.")
+            }
+
+            Section {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Search for a place", text: $query)
+                        .submitLabel(.search)
+                        .autocorrectionDisabled()
+                        .onSubmit { Task { await search() } }
+                    if isSearching {
+                        ProgressView()
+                    } else if !query.isEmpty {
+                        Button {
+                            query = ""
+                            results = []
+                            searchFailed = false
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                ForEach(results, id: \.self) { item in
+                    Button {
+                        adopt(item)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.name ?? "Unnamed place")
+                                .foregroundStyle(.primary)
+                            if let detail = address(of: item) {
+                                Text(detail)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+
+                if searchFailed {
+                    Text("Nothing found. Try the suburb or street, or drop the pin on the map.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Find it")
             }
 
             Section {
@@ -104,7 +156,7 @@ struct WorkLocationView: View {
                         .foregroundStyle(.primary.opacity(0.12))
                         .stroke(.primary.opacity(0.5), lineWidth: 1.5)
 
-                    Annotation("Work", coordinate: place.coordinate) {
+                    Annotation(place.name.isEmpty ? "Work" : place.name, coordinate: place.coordinate) {
                         Image(systemName: "building.2.fill")
                             .font(.footnote)
                             .foregroundStyle(Color(.systemBackground))
@@ -125,6 +177,62 @@ struct WorkLocationView: View {
     }
 
     // MARK: - Actions
+
+    /// Apple's own map data rather than a coordinate typed from memory — a
+    /// geofence a few hundred metres off simply never fires.
+    private func search() async {
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+
+        isSearching = true
+        searchFailed = false
+        defer { isSearching = false }
+
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = text
+        // Bias to wherever the map is pointing, so a local name wins over a
+        // namesake on another continent.
+        if place.isSet {
+            request.region = MKCoordinateRegion(
+                center: place.coordinate,
+                latitudinalMeters: 200_000,
+                longitudinalMeters: 200_000
+            )
+        }
+
+        do {
+            let response = try await MKLocalSearch(request: request).start()
+            results = Array(response.mapItems.prefix(6))
+            searchFailed = results.isEmpty
+        } catch {
+            results = []
+            searchFailed = true
+        }
+    }
+
+    private func adopt(_ item: MKMapItem) {
+        let coordinate = item.location.coordinate
+        place.coordinate = coordinate
+        place.name = item.name ?? ""
+        place.isSet = true
+        try? modelContext.save()
+
+        results = []
+        query = ""
+        camera = .region(MKCoordinateRegion(
+            center: coordinate,
+            latitudinalMeters: place.radius * 6,
+            longitudinalMeters: place.radius * 6
+        ))
+        restart()
+    }
+
+    private func address(of item: MKMapItem) -> String? {
+        // `placemark` is deprecated from iOS 26; MKAddress carries the strings
+        // already formatted for the region, which is better than assembling
+        // them by hand anyway.
+        item.address?.shortAddress ?? item.address?.fullAddress
+    }
 
     private func useCurrentLocation() async {
         if service.authorization == .notDetermined {

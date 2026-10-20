@@ -123,6 +123,10 @@ Built on `CLMonitor` — the current geofencing API, not the region-monitoring
 calls Apple has marked for deprecation. The monitor is persistent, so iOS wakes
 the app to deliver a crossing; you will not have Yetsa open at twenty to eight.
 
+Search for the place by name — Yetsa asks Apple's map data rather than making
+you read a coordinate off something — or drop the pin by tapping the map, or
+take a fix while standing there.
+
 What it needs, and what it cannot promise:
 
 - **Always location access.** While-using is not enough, because the crossing

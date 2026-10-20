@@ -20,6 +20,10 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Yetsa uses your location to set the circle around your workplace. The coordinate stays on this iPhone.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Yetsa watches for you crossing into your workplace so it can mark your arrival, which has to work while the app is closed. Nothing is recorded but the time you got in, and it stays on this iPhone.</string>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>Yetsa uses alarms for the moments a notification would be slept through or silenced: waking up, leaving home, and knocking off.</string>
 	<key>UIApplicationSceneManifest</key>

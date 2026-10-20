@@ -2,11 +2,13 @@ import SwiftUI
 import SwiftData
 import UserNotifications
 import AlarmKit
+import CoreLocation
 
 /// The scaffold lives here. Everything else in the app is derived from it, so
 /// this is the only screen that ever needs correcting when life changes shape.
 struct SetupView: View {
     @Query private var schedules: [DaySchedule]
+    @Query private var places: [WorkPlace]
     @Environment(\.modelContext) private var modelContext
 
     @State private var isAuthorized = false
@@ -47,6 +49,15 @@ struct SetupView: View {
         @unknown default:
             "Alarms sound through silent mode and through a Focus."
         }
+    }
+
+    /// There is one workplace. Make it on first look rather than seeding it,
+    /// so an unused install carries no location row at all.
+    private var workPlace: WorkPlace {
+        if let existing = places.first { return existing }
+        let place = WorkPlace()
+        modelContext.insert(place)
+        return place
     }
 
     private var ordered: [DaySchedule] {
@@ -127,6 +138,24 @@ struct SetupView: View {
                     Text("Alarms")
                 } footer: {
                     Text(alarmFooter)
+                }
+
+                Section {
+                    NavigationLink {
+                        WorkLocationView(place: workPlace)
+                    } label: {
+                        HStack {
+                            Label("Work location", systemImage: "building.2")
+                            Spacer()
+                            Text(workPlace.isSet ? "\(Int(workPlace.radius)) m" : "Not set")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Arriving")
+                } footer: {
+                    Text("Yetsa can notice you crossing into your workplace and mark the arrival, instead of assuming you got in at the time on the scaffold.")
                 }
 
                 Section {

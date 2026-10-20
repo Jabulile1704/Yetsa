@@ -112,6 +112,28 @@ The part most apps get wrong, and the reason this one exists:
 Skipping is its own thing, separate from missing: swipe a task right to skip
 it. A skip keeps the rhythm intact and stays out of quota counts.
 
+## Arriving at work
+
+The scaffold assumes you reach your desk at 07:45 because that is what you
+typed. Yetsa can check instead: draw a circle round your workplace in
+**Setup → Arriving**, and crossing into it marks the real arrival and says how
+it compared.
+
+Built on `CLMonitor` — the current geofencing API, not the region-monitoring
+calls Apple has marked for deprecation. The monitor is persistent, so iOS wakes
+the app to deliver a crossing; you will not have Yetsa open at twenty to eight.
+
+What it needs, and what it cannot promise:
+
+- **Always location access.** While-using is not enough, because the crossing
+  happens with the app shut.
+- **A hundred metres at minimum.** Tighter circles do not fire reliably.
+- **Minutes, not seconds.** iOS trades geofence precision for battery. Expect
+  the arrival within a few minutes of the real one, not to the second.
+
+It speaks once a day, on working days only, and records nothing but the time
+you got in. The coordinate lives in the same local store as everything else.
+
 ## Reminders
 
 Pinned to the scaffold rather than to clock times, so Friday's earlier

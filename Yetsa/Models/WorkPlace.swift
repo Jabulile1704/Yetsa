@@ -11,8 +11,9 @@ final class WorkPlace {
     var latitude: Double = 0
     var longitude: Double = 0
     /// Metres. Apple will not reliably fire a geofence much tighter than a
-    /// hundred, so that is the floor.
-    var radius: Double = 150
+    /// hundred, so that is both the floor and the default: tight enough to
+    /// mean you are at the building rather than passing it.
+    var radius: Double = 100
     var isSet: Bool = false
     /// What the place is called, so Setup can say more than a radius.
     var name: String = ""

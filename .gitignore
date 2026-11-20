@@ -9,3 +9,5 @@ xcuserdata/
 # macOS
 .DS_Store
 build-device/
+.build/
+*.xcresult

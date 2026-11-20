@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the toolchain this runner has
+        run: |
+          xcodebuild -version
+          echo "--- installed Xcodes ---"
+          ls /Applications | grep -i '^Xcode' || true
+          echo "--- simulator runtimes ---"
+          xcrun simctl list runtimes | grep -i ios || true
+
+      # Yetsa targets iOS 26.1 and uses AlarmKit and CLMonitor. If the runner's
+      # Xcode is older than the project needs, this step is where it will say
+      # so plainly rather than failing somewhere confusing.
+      - name: Pick the newest Xcode on the runner
+        run: |
+          NEWEST=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$NEWEST" ]; then
+            echo "using $NEWEST"
+            sudo xcode-select -s "$NEWEST/Contents/Developer"
+          fi
+          xcodebuild -version
+
+      - name: Build and test
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Yetsa.xcodeproj \
+            -scheme Yetsa \
+            -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16' \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify || xcodebuild test \
+                -project Yetsa.xcodeproj \
+                -scheme Yetsa \
+                -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16' \
+                CODE_SIGNING_ALLOWED=NO
+
+      - name: Keep the result bundle when something goes wrong
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ~/Library/Developer/Xcode/DerivedData/**/Logs/Test/*.xcresult
+          retention-days: 7

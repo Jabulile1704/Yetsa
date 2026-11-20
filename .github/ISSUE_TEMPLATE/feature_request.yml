@@ -1,0 +1,22 @@
+name: Feature
+description: Something Yetsa should be able to do
+labels: ["feature"]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What is the actual problem
+      description: >
+        Describe the situation rather than the solution. "I cannot tell what is
+        left in the evening" is more useful than "add a progress bar".
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: What you have in mind, if anything
+  - type: textarea
+    id: done
+    attributes:
+      label: How we would know it works
+      description: What you would check to be satisfied it is finished.

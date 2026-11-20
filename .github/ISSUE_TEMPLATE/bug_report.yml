@@ -1,0 +1,30 @@
+name: Bug report
+description: Something behaves differently from how it should
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, and what the app did instead of what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to see it again
+      placeholder: |
+        1. Open Setup
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Device and iOS version
+      placeholder: iPhone 15, iOS 26.5
+  - type: input
+    id: build
+    attributes:
+      label: Build
+      description: The commit or version you were running, if you know it.

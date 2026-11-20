@@ -11,6 +11,7 @@ enum NotificationKind: String, CaseIterable, Identifiable, Sendable {
     case knockOff
     case eveningPrep
     case weekReview
+    case dailyQuote
 
     var id: String { rawValue }
 
@@ -22,6 +23,7 @@ enum NotificationKind: String, CaseIterable, Identifiable, Sendable {
         case .knockOff: "Knock off"
         case .eveningPrep: "Tomorrow needs"
         case .weekReview: "Friday week review"
+        case .dailyQuote: "Morning quote"
         }
     }
 
@@ -33,6 +35,7 @@ enum NotificationKind: String, CaseIterable, Identifiable, Sendable {
         case .knockOff: "Marks the handover from work to your own evening."
         case .eveningPrep: "Ninety minutes before bed — ironing, packing, anything for the morning."
         case .weekReview: "Half an hour before Friday's early knock-off."
+        case .dailyQuote: "A line worth reading, as you get out of bed. Every day, weekends included."
         }
     }
 
@@ -44,6 +47,7 @@ enum NotificationKind: String, CaseIterable, Identifiable, Sendable {
         case .knockOff: "door.left.hand.open"
         case .eveningPrep: "moon.stars"
         case .weekReview: "checklist"
+        case .dailyQuote: "quote.opening"
         }
     }
 
@@ -91,7 +95,61 @@ enum NotificationScheduler {
                 try? await centre.add(plan)
             }
         }
+
+        await rescheduleQuotes(schedules: schedules)
     }
+
+    /// A repeating notification carries the same words forever, so the morning
+    /// quote is laid down a fortnight at a time as individual one-shots and
+    /// topped up whenever the app is opened.
+    ///
+    /// Fourteen days keeps the total under iOS's limit of sixty-four pending
+    /// notifications: the weekly set already accounts for about thirty.
+    static func rescheduleQuotes(schedules: [DaySchedule], days: Int = 14) async {
+        let centre = UNUserNotificationCenter.current()
+        let pending = await centre.pendingNotificationRequests()
+        centre.removePendingNotificationRequests(
+            withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix(quotePrefix) }
+        )
+
+        guard NotificationKind.dailyQuote.isEnabled,
+              await authorizationStatus() == .authorized else { return }
+
+        let calendar = Clock.calendar
+        let today = calendar.startOfDay(for: .now)
+
+        for offset in 0..<days {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
+            let weekday = calendar.component(.weekday, from: day)
+            guard let schedule = schedules.first(where: { $0.weekday == weekday }) else { continue }
+
+            let fireAt = Clock.date(on: day, minutes: schedule.outOfBed, calendar: calendar)
+            // Today's may already be behind us.
+            guard fireAt > .now else { continue }
+
+            let quote = Quotes.forDay(day, calendar: calendar)
+
+            let content = UNMutableNotificationContent()
+            content.title = "Good morning"
+            content.body = "\u{201C}\(quote.text)\u{201D}\n— \(quote.author)"
+            content.sound = nil
+            content.threadIdentifier = "quote"
+
+            var parts = calendar.dateComponents([.year, .month, .day], from: day)
+            parts.hour = schedule.outOfBed / 60
+            parts.minute = schedule.outOfBed % 60
+
+            let request = UNNotificationRequest(
+                identifier: "\(quotePrefix)\(offset)",
+                content: content,
+                trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)
+            )
+            try? await centre.add(request)
+        }
+    }
+
+    private static let quotePrefix = "quote-"
+
 
     private static func request(_ kind: NotificationKind, for schedule: DaySchedule) -> UNNotificationRequest? {
         guard let spec = spec(kind, schedule) else { return nil }
@@ -162,6 +220,10 @@ enum NotificationScheduler {
                 title: "Tomorrow needs",
                 body: "Ironing, packing, anything that would cost you the morning."
             )
+
+        case .dailyQuote:
+            // Scheduled day by day rather than weekly, so the line can change.
+            return nil
 
         case .weekReview:
             // Friday only, half an hour before the early knock-off.

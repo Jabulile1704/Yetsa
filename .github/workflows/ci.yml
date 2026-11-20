@@ -38,19 +38,36 @@ jobs:
           fi
           xcodebuild -version
 
+      # Runner images carry different simulator sets, so the device is
+      # resolved at runtime rather than named and hoped for.
+      - name: Choose a simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available --json | python3 -c "
+          import json, sys
+          runtimes = json.load(sys.stdin)['devices']
+          best = None
+          for runtime, devices in sorted(runtimes.items()):
+              if 'iOS' not in runtime:
+                  continue
+              for device in devices:
+                  if device.get('isAvailable') and 'iPhone' in device['name']:
+                      best = (device['udid'], device['name'], runtime)
+          if not best:
+              sys.exit('no iPhone simulator on this runner')
+          print(best[0])
+          sys.stderr.write('using %s on %s\\n' % (best[1], best[2]))
+          ")
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
       - name: Build and test
         run: |
           set -o pipefail
           xcodebuild test \
             -project Yetsa.xcodeproj \
             -scheme Yetsa \
-            -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16' \
-            CODE_SIGNING_ALLOWED=NO \
-            | xcbeautify || xcodebuild test \
-                -project Yetsa.xcodeproj \
-                -scheme Yetsa \
-                -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16' \
-                CODE_SIGNING_ALLOWED=NO
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Keep the result bundle when something goes wrong
         if: failure()

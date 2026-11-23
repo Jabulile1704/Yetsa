@@ -55,7 +55,7 @@ turns red and the day tells you before the morning does.
 | **Morning run** | The get-out-the-door sequence as one screen: a countdown to the door, numbered steps, big targets. The number it shows is *slack* — clock left minus work left — so it says "6 min behind" rather than making you do the arithmetic half-awake. Opens from Today any day; read-only when it is not today's. |
 | **Tasks** | The one-off pile, grouped by project or cohort. |
 | **Routines** | Everything that comes back, grouped by how it comes back, each with its cadence and next date. |
-| **Setup** | Your week, one day at a time, and which reminders are on. |
+| **Setup** | Your week, one day at a time; which reminders and alarms are on; where work is and how wide its radius; and your data — export it as JSON or CSV, or erase all of it. |
 
 ## The icon
 
@@ -218,6 +218,14 @@ Yetsa/
 `DayPlanner` is the centre of it: it builds the windows from a `DaySchedule`,
 asks `RecurrenceEngine` what is due, and pours the tasks in — each one into the
 window it asked for, or the first window that will take its context.
+
+## Working on it
+
+[CONTRIBUTING.md](CONTRIBUTING.md) has the branch rules, what the two CI
+checks do, and how a release gets cut. The design docs are in `Docs/`:
+[Architecture](Docs/Architecture.md) for why the app is shaped around
+anchors and windows, [ERD](Docs/ERD.md) for the data model, and
+[Use cases](Docs/UseCases.md) for what it is meant to do.
 
 ## Not in this version
 

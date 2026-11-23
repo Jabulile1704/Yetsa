@@ -3,12 +3,14 @@ import SwiftData
 import UserNotifications
 import AlarmKit
 import CoreLocation
+import UniformTypeIdentifiers
 
 /// The scaffold lives here. Everything else in the app is derived from it, so
 /// this is the only screen that ever needs correcting when life changes shape.
 struct SetupView: View {
     @Query private var schedules: [DaySchedule]
     @Query private var places: [WorkPlace]
+    @Query private var tasks: [TaskItem]
     @Environment(\.modelContext) private var modelContext
 
     @State private var isAuthorized = false
@@ -18,6 +20,28 @@ struct SetupView: View {
     /// `@AppStorage` key is only read when a view is first created, which
     /// makes rows inside a ForEach unreliable.
     @State private var enabledAlarms: Set<String> = []
+    @State private var exportJSON: URL?
+    @State private var exportCSV: URL?
+    @State private var showingErase = false
+    @State private var exportProblem: String?
+
+    /// Writes both files to the temporary directory so the share sheet has
+    /// a real URL to offer. Cheap enough to redo whenever Setup appears.
+    private func prepareExports() {
+        exportProblem = nil
+        do {
+            let place = places.first
+            let json = try DataExport.json(tasks: tasks, schedules: ordered, place: place)
+            exportJSON = try DataExport.write(json, named: DataExport.filename(extension: "json"))
+
+            let csv = DataExport.completionsCSV(tasks: tasks, calendar: Clock.calendar)
+            exportCSV = try DataExport.write(Data(csv.utf8), named: DataExport.filename(extension: "csv"))
+        } catch {
+            exportJSON = nil
+            exportCSV = nil
+            exportProblem = "Could not prepare the export. \(error.localizedDescription)"
+        }
+    }
 
     private func binding(for kind: AlarmKind) -> Binding<Bool> {
         Binding(
@@ -160,6 +184,32 @@ struct SetupView: View {
                 }
 
                 Section {
+                    if let exportJSON {
+                        ShareLink(item: exportJSON) {
+                            Label("Export everything (JSON)", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                    if let exportCSV {
+                        ShareLink(item: exportCSV) {
+                            Label("Export the tick history (CSV)", systemImage: "tablecells")
+                        }
+                    }
+                    if let exportProblem {
+                        Text(exportProblem)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+
+                    Button("Erase all data", role: .destructive) {
+                        showingErase = true
+                    }
+                } header: {
+                    Text("Your data")
+                } footer: {
+                    Text("Yetsa has no account, because it has no server — everything it knows is on this iPhone. Take a copy before you need one, and erase it here if you want it gone.")
+                }
+
+                Section {
                     LabeledContent("Stored", value: "On this iPhone only")
                     LabeledContent("Week starts", value: "Monday")
                 } header: {
@@ -169,12 +219,26 @@ struct SetupView: View {
                 }
             }
             .navigationTitle("Setup")
+            .confirmationDialog(
+                "Erase everything on this iPhone?",
+                isPresented: $showingErase,
+                titleVisibility: .visible
+            ) {
+                Button("Erase all data", role: .destructive) {
+                    DataExport.eraseEverything(in: modelContext)
+                    prepareExports()
+                }
+                Button("Keep it", role: .cancel) {}
+            } message: {
+                Text("Every task, every tick and your whole week go. The starter routine comes back in their place. This cannot be undone, and there is no copy anywhere else.")
+            }
             .task {
                 isAuthorized = await NotificationScheduler.authorizationStatus() == .authorized
                 if isAuthorized {
                     await NotificationScheduler.reschedule(schedules: ordered)
                 }
                 enabledAlarms = Set(AlarmKind.userFacing.filter(\.isEnabled).map(\.rawValue))
+                prepareExports()
                 alarmState = AlarmScheduler.authorizationState
                 if alarmState == .authorized {
                     alarmCount = await AlarmScheduler.reschedule(schedules: ordered)

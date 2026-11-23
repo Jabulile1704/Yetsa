@@ -4,26 +4,18 @@ import UserNotifications
 
 @main
 struct YetsaApp: App {
-    private let container = YetsaApp.makeContainer()
+    private let container: ModelContainer
+
+    init() {
+        container = YetsaStore.shared
+        YetsaStore.bootstrap()
+    }
 
     var body: some Scene {
         WindowGroup {
             RootView()
         }
         .modelContainer(container)
-    }
-
-    private static func makeContainer() -> ModelContainer {
-        let schema = Schema([TaskItem.self, Completion.self, DaySchedule.self, WorkPlace.self])
-        let configuration = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
-
-        guard let container = try? ModelContainer(for: schema, configurations: configuration) else {
-            fatalError("Could not open the Yetsa store")
-        }
-
-        Seed.installIfNeeded(container.mainContext)
-        ArrivalWatcher.start(in: container.mainContext)
-        return container
     }
 }
 

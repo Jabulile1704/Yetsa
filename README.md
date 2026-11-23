@@ -219,6 +219,37 @@ Yetsa/
 asks `RecurrenceEngine` what is due, and pours the tasks in — each one into the
 window it asked for, or the first window that will take its context.
 
+## Siri and Shortcuts
+
+Seven App Intents, so the app can be asked things without being opened. None
+of them bring Yetsa to the front: an answer you have to look at a screen for
+is not an answer you can use with a kettle in your hand.
+
+| Say | What comes back |
+| --- | --- |
+| "Am I behind in Yetsa" | Slack — clock left minus work left — plus steps and work remaining |
+| "How long until I leave in Yetsa" | A countdown to the door, or how late you already are |
+| "What's free in Yetsa" | A window's free time, or the whole day with work excluded |
+| "What's next in Yetsa" | The next fixed point on the scaffold and the gap to it |
+| "Add a task to Yetsa" | Adds a one-off and says which window took it |
+| "Mark something done in Yetsa" | Ticks it off, matching on what you actually said |
+| "What's today's quote in Yetsa" | The line the morning notification carried |
+
+**Am I behind** is the one that earns its keep. It is the morning run's slack
+without finding the phone, unlocking it and reading it.
+
+Two things are deliberate. Ticking by voice **never un-ticks**: with no
+visible state in front of you, saying "mark it done" twice must not quietly
+undo the first one, so the intent reports "already done" instead of toggling.
+And tasks are matched by an encoded store identifier rather than by title, so
+two tasks sharing a name cannot settle the wrong one — the title is only used
+for *ranking* what you said against what exists.
+
+**On the simulator the shortcuts appear but cannot run.** Simulator builds are
+ad-hoc signed with no team identifier, and `linkd` logs `Unable to get teamId`
+when it tries to dispatch. This is a signing fact, not a bug — a team-signed
+device build runs them.
+
 ## Working on it
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the branch rules, what the two CI

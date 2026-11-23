@@ -7,6 +7,31 @@ This project follows [semantic versioning](https://semver.org): the version in
 
 ## [Unreleased]
 
+### Added
+
+- Seven App Intents, putting Yetsa into Siri, Shortcuts and Spotlight: ask
+  whether you are behind on the morning run, how long until the door, what is
+  free in a window or across the day, what comes next on the scaffold, today's
+  quote; and add or complete a task by voice. None open the app.
+- `IntentAnswers`, which holds every sentence Siri speaks. App Intents cannot
+  be unit tested, so the intents are thin shells over this, and it is covered
+  by 24 tests.
+- `TaskEntity` and a string-matching query, so "mark iron my clothes done"
+  finds the right task. Ranking prefers an exact title, then a prefix, then a
+  word boundary, then a bare substring.
+
+### Changed
+
+- The store is opened once in `YetsaStore` and shared by the app and the
+  intents. Siri may launch the app with no window at all, so the container can
+  no longer be something the app makes on its way to drawing a view.
+- `Clock` is `nonisolated` throughout. It is pure arithmetic and was only
+  main-actor-isolated by the project default, which put it out of reach of the
+  nonisolated contexts App Intents requires.
+- Completing by voice no longer toggles. Saying "mark it done" twice reports
+  that it was already done rather than silently un-ticking it.
+
+
 Nothing yet.
 
 ## [1.0.0] — 2026-11-23

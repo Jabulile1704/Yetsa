@@ -110,6 +110,51 @@ screen, which is MapKit's own call and carries no Yetsa data.
 | Alarms | AlarmKit (iOS 26) | Sounds through silent mode and a Focus; a notification does neither, and you cannot be woken by something a Focus suppresses |
 | Arrival | CoreLocation `CLMonitor` | Region monitoring is marked for deprecation; `CLMonitor` persists and wakes the app for a crossing |
 | Place search | MapKit `MKLocalSearch` | A coordinate typed from memory makes a geofence that silently never fires |
+| Siri, Shortcuts, Spotlight | AppIntents | Native, on-device, no model and no network; the app already knows the answers, it only lacked a way to be asked |
+
+## The intents layer
+
+`Yetsa/Intents/` holds seven App Intents. The shape matters more than the
+count, because an App Intent cannot be unit tested — the intents runtime is
+not available to XCTest.
+
+So the intents are deliberately thin. Each one fetches, calls exactly one
+function in `IntentAnswers`, and hands back the string. Everything that could
+be wrong — which window, whether it has already passed, whether the plan even
+fits, how to say a day out loud — lives in `IntentAnswers`, which is pure and
+covered by tests.
+
+```
+Siri / Shortcuts / Spotlight
+        │
+        ▼
+  AppIntent  ──fetch──▶  YetsaStore  ──▶  PlanBuilder / RecurrenceEngine
+        │                                        │
+        └────────────▶  IntentAnswers  ◀─────────┘
+                              │
+                        a spoken string
+```
+
+Three consequences of the layer worth recording:
+
+**The store is opened once.** Siri may launch the app in the background with
+no window, so `YetsaStore.shared` is the container and `YetsaApp` uses it
+rather than making its own. `bootstrap()` — seeding and geofencing — is kept
+separate, because an intent answering "how long until I leave" has no business
+starting location monitoring.
+
+**Nothing opens the app.** Every intent sets `openAppWhenRun = false`. The
+whole value is answering without a screen.
+
+**Completing by voice does not toggle.** `RecurrenceEngine.toggle` is right
+for a tap, where you can see what you are toggling against. By voice there is
+no visible state, so saying it twice must not undo the first one; the intent
+checks first and reports "already done".
+
+Tasks cross the process boundary as `TaskEntity`, a flat `Sendable` snapshot
+rather than the live `@Model`, identified by a base64url-encoded
+`PersistentIdentifier` so two tasks with the same title cannot be confused.
+Titles are used only to *rank* what was heard against what exists.
 
 ## Decisions worth knowing
 

@@ -21,7 +21,7 @@ struct SnoozePlan {
     /// Each snooze, sized so the whole chain lands on the buffer rather than
     /// running past it.
     var minutes: Int {
-        guard count > 0 else { return 0 }
+        guard isAvailable else { return 0 }
         return max(1, bufferMinutes / count)
     }
 }

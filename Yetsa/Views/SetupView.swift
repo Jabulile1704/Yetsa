@@ -206,7 +206,11 @@ struct SetupView: View {
                 } header: {
                     Text("Your data")
                 } footer: {
-                    Text("Yetsa has no account, because it has no server — everything it knows is on this iPhone. Take a copy before you need one, and erase it here if you want it gone.")
+                    Text("""
+                        Yetsa has no account, because it has no server — everything it \
+                        knows is on this iPhone. Take a copy before you need one, and \
+                        erase it here if you want it gone.
+                        """)
                 }
 
                 Section {
@@ -230,7 +234,11 @@ struct SetupView: View {
                 }
                 Button("Keep it", role: .cancel) {}
             } message: {
-                Text("Every task, every tick and your whole week go. The starter routine comes back in their place. This cannot be undone, and there is no copy anywhere else.")
+                Text("""
+                    Every task, every tick and your whole week go. The starter routine \
+                    comes back in their place. This cannot be undone, and there is no \
+                    copy anywhere else.
+                    """)
             }
             .task {
                 isAuthorized = await NotificationScheduler.authorizationStatus() == .authorized
@@ -258,7 +266,9 @@ private struct DayScheduleRow: View {
             Spacer()
 
             if schedule.isWorkday {
-                Text("\(Clock.clockString(minutes: schedule.leaveHome, calendar: Clock.calendar)) – \(Clock.clockString(minutes: schedule.knockOff, calendar: Clock.calendar))")
+                let out = Clock.clockString(minutes: schedule.leaveHome, calendar: Clock.calendar)
+                let back = Clock.clockString(minutes: schedule.knockOff, calendar: Clock.calendar)
+                Text("\(out) – \(back)")
                     .font(.caption)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)

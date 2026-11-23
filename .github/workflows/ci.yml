@@ -76,3 +76,18 @@ jobs:
           name: test-results
           path: ~/Library/Developer/Xcode/DerivedData/**/Logs/Test/*.xcresult
           retention-days: 7
+
+  lint:
+    name: Lint
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      # Warnings are reported but do not fail the job; only error-severity
+      # rules do. The thresholds in .swiftlint.yml are set so that a gate
+      # failing means something genuinely went wrong, not that a line grew.
+      - name: Lint
+        run: swiftlint lint --reporter github-actions-logging

@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release, e.g. v1.0.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Test, archive and publish
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Work out the version
+        id: version
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "number=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # A tag that disagrees with the project is a mistake worth catching here
+      # rather than discovering on a device later.
+      - name: Check the tag matches MARKETING_VERSION
+        run: |
+          IN_PROJECT=$(grep -m1 'MARKETING_VERSION = ' Yetsa.xcodeproj/project.pbxproj \
+            | sed 's/.*MARKETING_VERSION = \(.*\);/\1/')
+          echo "tag says ${{ steps.version.outputs.number }}, project says $IN_PROJECT"
+          if [ "$IN_PROJECT" != "${{ steps.version.outputs.number }}" ]; then
+            echo "::error::Tag ${{ steps.version.outputs.tag }} does not match MARKETING_VERSION $IN_PROJECT"
+            exit 1
+          fi
+
+      - name: Choose a simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available --json | python3 -c "
+          import json, sys
+          best = None
+          for runtime, devices in sorted(json.load(sys.stdin)['devices'].items()):
+              if 'iOS' not in runtime:
+                  continue
+              for device in devices:
+                  if device.get('isAvailable') and 'iPhone' in device['name']:
+                      best = device['udid']
+          if not best:
+              sys.exit('no iPhone simulator on this runner')
+          print(best)
+          ")
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Nothing ships that does not pass
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Yetsa.xcodeproj \
+            -scheme Yetsa \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO
+
+      # An unsigned simulator build, which is what can be produced without
+      # Apple credentials in CI. A signed device build still comes from Xcode.
+      - name: Archive the simulator build
+        run: |
+          xcodebuild build \
+            -project Yetsa.xcodeproj \
+            -scheme Yetsa \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build-release \
+            CODE_SIGNING_ALLOWED=NO
+          cd build-release/Build/Products/Release-iphonesimulator
+          zip -ryq "$GITHUB_WORKSPACE/Yetsa-${{ steps.version.outputs.tag }}-simulator.zip" Yetsa.app
+
+      - name: Pull the notes out of the changelog
+        id: notes
+        run: |
+          python3 - <<'PY' > release-notes.md
+          import re, pathlib, os
+          number = os.environ["NUMBER"]
+          text = pathlib.Path("CHANGELOG.md").read_text()
+          match = re.search(
+              r"^## \[" + re.escape(number) + r"\][^\n]*\n(.*?)(?=^## |\Z)",
+              text, re.S | re.M
+          )
+          print(match.group(1).strip() if match else "See CHANGELOG.md.")
+          PY
+        env:
+          NUMBER: ${{ steps.version.outputs.number }}
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Yetsa ${{ steps.version.outputs.number }}
+          body_path: release-notes.md
+          files: Yetsa-${{ steps.version.outputs.tag }}-simulator.zip
